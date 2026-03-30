@@ -34,6 +34,7 @@ class Matrix_Donations_Settings {
 		add_action( 'admin_post_matrix_donations_run_quick_diagnostics', array( $this, 'handle_run_quick_diagnostics' ) );
 		add_action( 'admin_post_matrix_donations_run_smoke_tests', array( $this, 'handle_run_smoke_tests' ) );
 		add_action( 'admin_post_matrix_donations_run_full_e2e', array( $this, 'handle_run_full_e2e' ) );
+		add_action( 'admin_post_matrix_donations_check_full_e2e_status', array( $this, 'handle_check_full_e2e_status' ) );
 		add_action( 'admin_post_matrix_donations_mark_e2e_status', array( $this, 'handle_mark_e2e_status' ) );
 		add_action( 'admin_notices', array( $this, 'render_mock_mode_notice' ) );
 		add_action( 'admin_notices', array( $this, 'render_test_email_notice' ) );
@@ -41,6 +42,7 @@ class Matrix_Donations_Settings {
 		add_action( 'admin_notices', array( $this, 'render_quick_diagnostics_notice' ) );
 		add_action( 'admin_notices', array( $this, 'render_smoke_tests_notice' ) );
 		add_action( 'admin_notices', array( $this, 'render_full_e2e_notice' ) );
+		add_action( 'admin_notices', array( $this, 'render_full_e2e_status_check_notice' ) );
 		add_action( 'admin_notices', array( $this, 'render_e2e_status_notice' ) );
 	}
 
@@ -120,6 +122,13 @@ class Matrix_Donations_Settings {
 			'matrix_donations_testing',
 			__( 'Testing & Diagnostics', 'matrix-donations' ),
 			array( $this, 'section_testing_callback' ),
+			'matrix-donations-settings'
+		);
+
+		add_settings_section(
+			'matrix_donations_e2e',
+			__( 'E2E Automation', 'matrix-donations' ),
+			array( $this, 'section_e2e_callback' ),
 			'matrix-donations-settings'
 		);
 
@@ -277,10 +286,11 @@ class Matrix_Donations_Settings {
 			__( 'E2E GitHub Repository', 'matrix-donations' ),
 			array( $this, 'field_text_callback' ),
 			'matrix-donations-settings',
-			'matrix_donations_testing',
+			'matrix_donations_e2e',
 			array(
 				'field'       => 'e2e_github_repository',
 				'placeholder' => 'owner/repo',
+				'description' => __( 'Repository that contains the GitHub Actions workflow, for example: bernardhanna/matrix-stripe-donations', 'matrix-donations' ),
 			)
 		);
 
@@ -289,9 +299,10 @@ class Matrix_Donations_Settings {
 			__( 'E2E Workflow File', 'matrix-donations' ),
 			array( $this, 'field_text_callback' ),
 			'matrix-donations-settings',
-			'matrix_donations_testing',
+			'matrix_donations_e2e',
 			array(
-				'field' => 'e2e_github_workflow',
+				'field'       => 'e2e_github_workflow',
+				'description' => __( 'Workflow filename in .github/workflows, e.g. donations-e2e.yml', 'matrix-donations' ),
 			)
 		);
 
@@ -300,9 +311,10 @@ class Matrix_Donations_Settings {
 			__( 'E2E Branch/Ref', 'matrix-donations' ),
 			array( $this, 'field_text_callback' ),
 			'matrix-donations-settings',
-			'matrix_donations_testing',
+			'matrix_donations_e2e',
 			array(
-				'field' => 'e2e_github_ref',
+				'field'       => 'e2e_github_ref',
+				'description' => __( 'Branch or tag to run against. Usually main.', 'matrix-donations' ),
 			)
 		);
 
@@ -311,10 +323,11 @@ class Matrix_Donations_Settings {
 			__( 'E2E GitHub Token', 'matrix-donations' ),
 			array( $this, 'field_text_callback' ),
 			'matrix-donations-settings',
-			'matrix_donations_testing',
+			'matrix_donations_e2e',
 			array(
-				'field' => 'e2e_github_token',
-				'type'  => 'password',
+				'field'       => 'e2e_github_token',
+				'type'        => 'password',
+				'description' => __( 'Personal access token used to dispatch the workflow from wp-admin.', 'matrix-donations' ),
 			)
 		);
 
@@ -323,11 +336,12 @@ class Matrix_Donations_Settings {
 			__( 'E2E Base URL Override', 'matrix-donations' ),
 			array( $this, 'field_text_callback' ),
 			'matrix-donations-settings',
-			'matrix_donations_testing',
+			'matrix_donations_e2e',
 			array(
 				'field'       => 'e2e_base_url',
 				'type'        => 'url',
 				'placeholder' => 'https://your-site.example',
+				'description' => __( 'Optional. If set, this value is passed to workflow_dispatch as MATRIX_DONATIONS_BASE_URL.', 'matrix-donations' ),
 			)
 		);
 
@@ -336,10 +350,11 @@ class Matrix_Donations_Settings {
 			__( 'E2E Site Password Override', 'matrix-donations' ),
 			array( $this, 'field_text_callback' ),
 			'matrix-donations-settings',
-			'matrix_donations_testing',
+			'matrix_donations_e2e',
 			array(
-				'field' => 'e2e_site_password',
-				'type'  => 'password',
+				'field'       => 'e2e_site_password',
+				'type'        => 'password',
+				'description' => __( 'Optional. For password-protected staging environments. Leave empty to use repository secret.', 'matrix-donations' ),
 			)
 		);
 
@@ -742,7 +757,11 @@ class Matrix_Donations_Settings {
 	}
 
 	public function section_testing_callback() {
-		echo '<p>' . esc_html__( 'Controls for diagnostics, mock checkout, technical alerts, testing helpers, and optional GitHub-triggered Playwright runs from wp-admin. E2E base URL/password overrides are optional; if empty, repository secrets are used.', 'matrix-donations' ) . '</p>';
+		echo '<p>' . esc_html__( 'Controls for local diagnostics, mock checkout, technical alerts, and test card helpers.', 'matrix-donations' ) . '</p>';
+	}
+
+	public function section_e2e_callback() {
+		echo '<p>' . esc_html__( 'Configure GitHub-based Playwright automation. Use the buttons below to run smoke tests locally in WordPress or dispatch the full E2E workflow on GitHub.', 'matrix-donations' ) . '</p>';
 	}
 
 	public function section_pages_callback() {
@@ -774,6 +793,7 @@ class Matrix_Donations_Settings {
 		$min   = isset( $args['min'] ) ? ' min="' . esc_attr( $args['min'] ) . '"' : '';
 		$max   = isset( $args['max'] ) ? ' max="' . esc_attr( $args['max'] ) . '"' : '';
 		$placeholder = isset( $args['placeholder'] ) ? ' placeholder="' . esc_attr( $args['placeholder'] ) . '"' : '';
+		$description = isset( $args['description'] ) ? (string) $args['description'] : '';
 		?>
 		<input type="<?php echo esc_attr( $type ); ?>"
 			id="matrix_donations_<?php echo esc_attr( $field ); ?>"
@@ -785,6 +805,9 @@ class Matrix_Donations_Settings {
 			<?php echo $max; // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped ?>
 			<?php echo $placeholder; // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped ?>
 			autocomplete="off" />
+		<?php if ( '' !== trim( $description ) ) : ?>
+			<p class="description"><?php echo esc_html( $description ); ?></p>
+		<?php endif; ?>
 		<?php
 	}
 
@@ -1310,7 +1333,7 @@ class Matrix_Donations_Settings {
 			return;
 		}
 		$tab = isset( $_GET['settings_tab'] ) ? sanitize_key( wp_unslash( $_GET['settings_tab'] ) ) : 'stripe';
-		$allowed_tabs = array( 'stripe', 'pages', 'content', 'design', 'tax', 'testing', 'emails', 'thankyou' );
+		$allowed_tabs = array( 'stripe', 'pages', 'content', 'design', 'tax', 'testing', 'e2e', 'emails', 'thankyou' );
 		if ( ! in_array( $tab, $allowed_tabs, true ) ) {
 			$tab = 'stripe';
 		}
@@ -1329,6 +1352,7 @@ class Matrix_Donations_Settings {
 				<a class="button button-secondary matrix-settings-tab <?php echo ( 'design' === $tab ) ? 'is-active' : ''; ?>" href="<?php echo esc_url( add_query_arg( array( 'page' => 'matrix-donations-settings', 'settings_tab' => 'design' ), admin_url( 'admin.php' ) ) ); ?>"><?php esc_html_e( 'Design', 'matrix-donations' ); ?></a>
 				<a class="button button-secondary matrix-settings-tab <?php echo ( 'tax' === $tab ) ? 'is-active' : ''; ?>" href="<?php echo esc_url( add_query_arg( array( 'page' => 'matrix-donations-settings', 'settings_tab' => 'tax' ), admin_url( 'admin.php' ) ) ); ?>"><?php esc_html_e( 'Tax', 'matrix-donations' ); ?></a>
 				<a class="button button-secondary matrix-settings-tab <?php echo ( 'testing' === $tab ) ? 'is-active' : ''; ?>" href="<?php echo esc_url( add_query_arg( array( 'page' => 'matrix-donations-settings', 'settings_tab' => 'testing' ), admin_url( 'admin.php' ) ) ); ?>"><?php esc_html_e( 'Testing', 'matrix-donations' ); ?></a>
+				<a class="button button-secondary matrix-settings-tab <?php echo ( 'e2e' === $tab ) ? 'is-active' : ''; ?>" href="<?php echo esc_url( add_query_arg( array( 'page' => 'matrix-donations-settings', 'settings_tab' => 'e2e' ), admin_url( 'admin.php' ) ) ); ?>"><?php esc_html_e( 'E2E', 'matrix-donations' ); ?></a>
 				<a class="button button-secondary matrix-settings-tab <?php echo ( 'emails' === $tab ) ? 'is-active' : ''; ?>" href="<?php echo esc_url( add_query_arg( array( 'page' => 'matrix-donations-settings', 'settings_tab' => 'emails' ), admin_url( 'admin.php' ) ) ); ?>"><?php esc_html_e( 'Emails', 'matrix-donations' ); ?></a>
 				<a class="button button-secondary matrix-settings-tab <?php echo ( 'thankyou' === $tab ) ? 'is-active' : ''; ?>" href="<?php echo esc_url( add_query_arg( array( 'page' => 'matrix-donations-settings', 'settings_tab' => 'thankyou' ), admin_url( 'admin.php' ) ) ); ?>"><?php esc_html_e( 'Thank You', 'matrix-donations' ); ?></a>
 			</nav>
@@ -1387,6 +1411,46 @@ class Matrix_Donations_Settings {
 					<?php submit_button( __( 'Validate Live Stripe Keys', 'matrix-donations' ), 'secondary', 'submit', false ); ?>
 				</form>
 			<?php endif; ?>
+			<?php if ( 'e2e' === $tab ) : ?>
+				<?php
+				$last_smoke_tests = self::get_last_smoke_tests();
+				$last_full_e2e    = self::get_last_full_e2e_dispatch();
+				$last_full_e2e_status = self::get_last_full_e2e_status_check();
+				?>
+				<hr />
+				<h2><?php esc_html_e( 'Run Tests', 'matrix-donations' ); ?></h2>
+				<p><?php esc_html_e( 'Run quick WordPress smoke checks or dispatch the full Playwright E2E workflow on GitHub.', 'matrix-donations' ); ?></p>
+				<form method="post" action="<?php echo esc_url( admin_url( 'admin-post.php' ) ); ?>" style="display:inline-block;margin-right:8px;">
+					<input type="hidden" name="action" value="matrix_donations_run_smoke_tests" />
+					<input type="hidden" name="return_page" value="matrix-donations-settings" />
+					<input type="hidden" name="return_tab" value="e2e" />
+					<?php wp_nonce_field( 'matrix_donations_run_smoke_tests', 'matrix_donations_nonce' ); ?>
+					<?php submit_button( __( 'Run Smoke Tests', 'matrix-donations' ), 'secondary', 'submit', false ); ?>
+				</form>
+				<form method="post" action="<?php echo esc_url( admin_url( 'admin-post.php' ) ); ?>" style="display:inline-block;">
+					<input type="hidden" name="action" value="matrix_donations_run_full_e2e" />
+					<input type="hidden" name="return_page" value="matrix-donations-settings" />
+					<input type="hidden" name="return_tab" value="e2e" />
+					<?php wp_nonce_field( 'matrix_donations_run_full_e2e', 'matrix_donations_nonce' ); ?>
+					<?php submit_button( __( 'Run Full Playwright E2E', 'matrix-donations' ), 'secondary', 'submit', false ); ?>
+				</form>
+				<form method="post" action="<?php echo esc_url( admin_url( 'admin-post.php' ) ); ?>" style="display:inline-block;margin-left:8px;">
+					<input type="hidden" name="action" value="matrix_donations_check_full_e2e_status" />
+					<input type="hidden" name="return_page" value="matrix-donations-settings" />
+					<input type="hidden" name="return_tab" value="e2e" />
+					<?php wp_nonce_field( 'matrix_donations_check_full_e2e_status', 'matrix_donations_nonce' ); ?>
+					<?php submit_button( __( 'Check Latest E2E Status', 'matrix-donations' ), 'secondary', 'submit', false ); ?>
+				</form>
+				<?php if ( ! empty( $last_smoke_tests['message'] ) ) : ?>
+					<p><strong><?php esc_html_e( 'Last Smoke Tests:', 'matrix-donations' ); ?></strong> <?php echo esc_html( $last_smoke_tests['message'] ); ?></p>
+				<?php endif; ?>
+				<?php if ( ! empty( $last_full_e2e['message'] ) ) : ?>
+					<p><strong><?php esc_html_e( 'Last Full E2E Dispatch:', 'matrix-donations' ); ?></strong> <?php echo esc_html( $last_full_e2e['message'] ); ?></p>
+				<?php endif; ?>
+				<?php if ( ! empty( $last_full_e2e_status['message'] ) ) : ?>
+					<p><strong><?php esc_html_e( 'Latest GitHub E2E Run:', 'matrix-donations' ); ?></strong> <?php echo esc_html( $last_full_e2e_status['message'] ); ?></p>
+				<?php endif; ?>
+			<?php endif; ?>
 		</div>
 		<?php
 	}
@@ -1411,6 +1475,7 @@ class Matrix_Donations_Settings {
 			'design'   => array( 'matrix_donations_design' ),
 			'tax'      => array( 'matrix_donations_tax' ),
 			'testing'  => array( 'matrix_donations_testing' ),
+			'e2e'      => array( 'matrix_donations_e2e' ),
 			'emails'   => array( 'matrix_donations_emails' ),
 			'thankyou' => array( 'matrix_donations_thank_you' ),
 		);
@@ -1602,15 +1667,19 @@ class Matrix_Donations_Settings {
 		$result = $this->run_smoke_tests();
 		self::set_last_smoke_tests( $result );
 
-		wp_safe_redirect(
-			add_query_arg(
-				array(
-					'page'               => 'matrix-donations',
-					'matrix_smoke_tests' => '1',
-				),
-				admin_url( 'admin.php' )
-			)
+		$return_page = isset( $_POST['return_page'] ) ? sanitize_key( wp_unslash( $_POST['return_page'] ) ) : 'matrix-donations';
+		$return_tab  = isset( $_POST['return_tab'] ) ? sanitize_key( wp_unslash( $_POST['return_tab'] ) ) : '';
+		if ( ! in_array( $return_page, array( 'matrix-donations', 'matrix-donations-settings' ), true ) ) {
+			$return_page = 'matrix-donations';
+		}
+		$args = array(
+			'page'               => $return_page,
+			'matrix_smoke_tests' => '1',
 		);
+		if ( 'matrix-donations-settings' === $return_page && '' !== $return_tab ) {
+			$args['settings_tab'] = $return_tab;
+		}
+		wp_safe_redirect( add_query_arg( $args, admin_url( 'admin.php' ) ) );
 		exit;
 	}
 
@@ -1628,15 +1697,49 @@ class Matrix_Donations_Settings {
 		$result = $this->run_full_e2e_dispatch();
 		self::set_last_full_e2e_dispatch( $result );
 
-		wp_safe_redirect(
-			add_query_arg(
-				array(
-					'page'            => 'matrix-donations',
-					'matrix_full_e2e' => '1',
-				),
-				admin_url( 'admin.php' )
-			)
+		$return_page = isset( $_POST['return_page'] ) ? sanitize_key( wp_unslash( $_POST['return_page'] ) ) : 'matrix-donations';
+		$return_tab  = isset( $_POST['return_tab'] ) ? sanitize_key( wp_unslash( $_POST['return_tab'] ) ) : '';
+		if ( ! in_array( $return_page, array( 'matrix-donations', 'matrix-donations-settings' ), true ) ) {
+			$return_page = 'matrix-donations';
+		}
+		$args = array(
+			'page'            => $return_page,
+			'matrix_full_e2e' => '1',
 		);
+		if ( 'matrix-donations-settings' === $return_page && '' !== $return_tab ) {
+			$args['settings_tab'] = $return_tab;
+		}
+		wp_safe_redirect( add_query_arg( $args, admin_url( 'admin.php' ) ) );
+		exit;
+	}
+
+	/**
+	 * Query GitHub Actions for latest E2E workflow run status.
+	 *
+	 * @return void
+	 */
+	public function handle_check_full_e2e_status() {
+		if ( ! current_user_can( 'manage_options' ) ) {
+			wp_die( esc_html__( 'Unauthorized.', 'matrix-donations' ) );
+		}
+		check_admin_referer( 'matrix_donations_check_full_e2e_status', 'matrix_donations_nonce' );
+
+		$result = $this->check_latest_full_e2e_status();
+		self::set_last_full_e2e_status_check( $result );
+
+		$return_page = isset( $_POST['return_page'] ) ? sanitize_key( wp_unslash( $_POST['return_page'] ) ) : 'matrix-donations';
+		$return_tab  = isset( $_POST['return_tab'] ) ? sanitize_key( wp_unslash( $_POST['return_tab'] ) ) : '';
+		if ( ! in_array( $return_page, array( 'matrix-donations', 'matrix-donations-settings' ), true ) ) {
+			$return_page = 'matrix-donations';
+		}
+		$args = array(
+			'page'                   => $return_page,
+			'matrix_full_e2e_status' => '1',
+		);
+		if ( 'matrix-donations-settings' === $return_page && '' !== $return_tab ) {
+			$args['settings_tab'] = $return_tab;
+		}
+		wp_safe_redirect( add_query_arg( $args, admin_url( 'admin.php' ) ) );
 		exit;
 	}
 
@@ -1757,7 +1860,7 @@ class Matrix_Donations_Settings {
 		}
 		$page = isset( $_GET['page'] ) ? sanitize_text_field( wp_unslash( $_GET['page'] ) ) : '';
 		$flag = isset( $_GET['matrix_smoke_tests'] ) ? sanitize_text_field( wp_unslash( $_GET['matrix_smoke_tests'] ) ) : '';
-		if ( 'matrix-donations' !== $page || '1' !== $flag ) {
+		if ( '1' !== $flag || ! in_array( $page, array( 'matrix-donations', 'matrix-donations-settings' ), true ) ) {
 			return;
 		}
 
@@ -1785,11 +1888,39 @@ class Matrix_Donations_Settings {
 		}
 		$page = isset( $_GET['page'] ) ? sanitize_text_field( wp_unslash( $_GET['page'] ) ) : '';
 		$flag = isset( $_GET['matrix_full_e2e'] ) ? sanitize_text_field( wp_unslash( $_GET['matrix_full_e2e'] ) ) : '';
-		if ( 'matrix-donations' !== $page || '1' !== $flag ) {
+		if ( '1' !== $flag || ! in_array( $page, array( 'matrix-donations', 'matrix-donations-settings' ), true ) ) {
 			return;
 		}
 
 		$last = self::get_last_full_e2e_dispatch();
+		if ( empty( $last['message'] ) ) {
+			return;
+		}
+
+		$class = ! empty( $last['success'] ) ? 'notice notice-success' : 'notice notice-error';
+		?>
+		<div class="<?php echo esc_attr( $class ); ?>">
+			<p><?php echo esc_html( $last['message'] ); ?></p>
+		</div>
+		<?php
+	}
+
+	/**
+	 * Show notice after checking latest GitHub E2E run status.
+	 *
+	 * @return void
+	 */
+	public function render_full_e2e_status_check_notice() {
+		if ( ! current_user_can( 'manage_options' ) ) {
+			return;
+		}
+		$page = isset( $_GET['page'] ) ? sanitize_text_field( wp_unslash( $_GET['page'] ) ) : '';
+		$flag = isset( $_GET['matrix_full_e2e_status'] ) ? sanitize_text_field( wp_unslash( $_GET['matrix_full_e2e_status'] ) ) : '';
+		if ( '1' !== $flag || ! in_array( $page, array( 'matrix-donations', 'matrix-donations-settings' ), true ) ) {
+			return;
+		}
+
+		$last = self::get_last_full_e2e_status_check();
 		if ( empty( $last['message'] ) ) {
 			return;
 		}
@@ -2286,6 +2417,122 @@ class Matrix_Donations_Settings {
 	}
 
 	/**
+	 * Fetch latest run status from GitHub Actions for the configured workflow.
+	 *
+	 * @return array
+	 */
+	private function check_latest_full_e2e_status() {
+		$repo     = trim( (string) self::get( 'e2e_github_repository' ) );
+		$workflow = trim( (string) self::get( 'e2e_github_workflow' ) );
+		$token    = trim( (string) self::get( 'e2e_github_token' ) );
+
+		if ( '' === $repo || false === strpos( $repo, '/' ) ) {
+			return array(
+				'success'   => false,
+				'message'   => __( 'Status check failed: set E2E GitHub Repository as owner/repo in E2E settings.', 'matrix-donations' ),
+				'timestamp' => current_time( 'mysql' ),
+			);
+		}
+		if ( '' === $workflow ) {
+			return array(
+				'success'   => false,
+				'message'   => __( 'Status check failed: set E2E Workflow File in E2E settings.', 'matrix-donations' ),
+				'timestamp' => current_time( 'mysql' ),
+			);
+		}
+		if ( '' === $token ) {
+			return array(
+				'success'   => false,
+				'message'   => __( 'Status check failed: set E2E GitHub Token in E2E settings.', 'matrix-donations' ),
+				'timestamp' => current_time( 'mysql' ),
+			);
+		}
+
+		$repo_parts = explode( '/', $repo );
+		if ( 2 !== count( $repo_parts ) || '' === trim( (string) $repo_parts[0] ) || '' === trim( (string) $repo_parts[1] ) ) {
+			return array(
+				'success'   => false,
+				'message'   => __( 'Status check failed: repository must be formatted as owner/repo.', 'matrix-donations' ),
+				'timestamp' => current_time( 'mysql' ),
+			);
+		}
+
+		$owner     = rawurlencode( trim( (string) $repo_parts[0] ) );
+		$repo_name = rawurlencode( trim( (string) $repo_parts[1] ) );
+		$endpoint  = sprintf(
+			'https://api.github.com/repos/%1$s/%2$s/actions/workflows/%3$s/runs?per_page=1',
+			$owner,
+			$repo_name,
+			rawurlencode( $workflow )
+		);
+
+		$response = wp_remote_get(
+			$endpoint,
+			array(
+				'timeout' => 20,
+				'headers' => array(
+					'Accept'               => 'application/vnd.github+json',
+					'Authorization'        => 'Bearer ' . $token,
+					'X-GitHub-Api-Version' => '2022-11-28',
+					'User-Agent'           => 'Matrix-Donations-Plugin',
+				),
+			)
+		);
+		if ( is_wp_error( $response ) ) {
+			return array(
+				'success'   => false,
+				'message'   => sprintf( __( 'Status check failed: %s', 'matrix-donations' ), $response->get_error_message() ),
+				'timestamp' => current_time( 'mysql' ),
+			);
+		}
+
+		$code = (int) wp_remote_retrieve_response_code( $response );
+		if ( 200 !== $code ) {
+			return array(
+				'success'   => false,
+				'message'   => sprintf( __( 'Status check failed (HTTP %d).', 'matrix-donations' ), $code ),
+				'timestamp' => current_time( 'mysql' ),
+			);
+		}
+
+		$body = json_decode( (string) wp_remote_retrieve_body( $response ), true );
+		if ( ! is_array( $body ) || empty( $body['workflow_runs'][0] ) || ! is_array( $body['workflow_runs'][0] ) ) {
+			return array(
+				'success'   => false,
+				'message'   => __( 'No workflow runs found yet for this E2E workflow.', 'matrix-donations' ),
+				'timestamp' => current_time( 'mysql' ),
+			);
+		}
+
+		$run        = $body['workflow_runs'][0];
+		$status     = sanitize_text_field( (string) ( $run['status'] ?? '' ) );
+		$conclusion = sanitize_text_field( (string) ( $run['conclusion'] ?? '' ) );
+		$run_no     = absint( $run['run_number'] ?? 0 );
+		$url        = esc_url_raw( (string) ( $run['html_url'] ?? '' ) );
+
+		$success = true;
+		if ( 'completed' === $status && ! in_array( $conclusion, array( 'success', '' ), true ) ) {
+			$success = false;
+		}
+		$message = sprintf(
+			/* translators: 1: run number, 2: status, 3: conclusion */
+			__( 'Run #%1$d status: %2$s, conclusion: %3$s.', 'matrix-donations' ),
+			$run_no,
+			'' !== $status ? $status : 'unknown',
+			'' !== $conclusion ? $conclusion : 'n/a'
+		);
+		if ( '' !== $url ) {
+			$message .= ' ' . $url;
+		}
+
+		return array(
+			'success'   => $success,
+			'message'   => $message,
+			'timestamp' => current_time( 'mysql' ),
+		);
+	}
+
+	/**
 	 * Persist last quick diagnostics result for admin visibility.
 	 *
 	 * @param array $result Result payload.
@@ -2342,6 +2589,26 @@ class Matrix_Donations_Settings {
 	 */
 	private static function get_last_full_e2e_dispatch() {
 		$value = get_option( 'matrix_donations_last_full_e2e_dispatch', array() );
+		return is_array( $value ) ? $value : array();
+	}
+
+	/**
+	 * Persist latest fetched GitHub E2E status result.
+	 *
+	 * @param array $result Result payload.
+	 * @return void
+	 */
+	private static function set_last_full_e2e_status_check( $result ) {
+		update_option( 'matrix_donations_last_full_e2e_status_check', $result, false );
+	}
+
+	/**
+	 * Read latest fetched GitHub E2E status result.
+	 *
+	 * @return array
+	 */
+	private static function get_last_full_e2e_status_check() {
+		$value = get_option( 'matrix_donations_last_full_e2e_status_check', array() );
 		return is_array( $value ) ? $value : array();
 	}
 
