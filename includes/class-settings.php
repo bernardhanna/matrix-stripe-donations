@@ -1586,6 +1586,11 @@ class Matrix_Donations_Settings {
 			$first = sanitize_text_field( (string) ( $names['first_name'] ?? '' ) );
 			$last  = sanitize_text_field( (string) ( $names['last_name'] ?? '' ) );
 			if ( '' === $first && '' === $last ) {
+				$from_stripe = $this->fetch_donor_names_from_stripe_for_backfill( $row );
+				$first       = sanitize_text_field( (string) ( $from_stripe['first_name'] ?? '' ) );
+				$last        = sanitize_text_field( (string) ( $from_stripe['last_name'] ?? '' ) );
+			}
+			if ( '' === $first && '' === $last ) {
 				$skipped++;
 				continue;
 			}
@@ -1667,6 +1672,95 @@ class Matrix_Donations_Settings {
 			}
 		}
 
+		return array(
+			'first_name' => $first,
+			'last_name'  => $last,
+		);
+	}
+
+	/**
+	 * Attempt donor-name recovery from Stripe objects for historical rows.
+	 *
+	 * @param array $row Donation row.
+	 * @return array
+	 */
+	private function fetch_donor_names_from_stripe_for_backfill( $row ) {
+		if ( ! Matrix_Donations_Stripe_Service::load_stripe() ) {
+			return array( 'first_name' => '', 'last_name' => '' );
+		}
+
+		$mode = sanitize_text_field( (string) ( $row['donation_mode'] ?? '' ) );
+		if ( ! in_array( $mode, array( 'test', 'live' ), true ) ) {
+			$mode = self::get_mode();
+		}
+		$secret_key = trim( (string) self::get( 'stripe_' . $mode . '_secret_key' ) );
+		if ( '' === $secret_key ) {
+			return array( 'first_name' => '', 'last_name' => '' );
+		}
+
+		try {
+			\Stripe\Stripe::setApiKey( $secret_key );
+			$full_name = '';
+
+			$session_id = sanitize_text_field( (string) ( $row['stripe_session_id'] ?? '' ) );
+			if ( '' !== $session_id ) {
+				$session = \Stripe\Checkout\Session::retrieve( $session_id );
+				$full_name = sanitize_text_field( (string) ( $session->customer_details->name ?? '' ) );
+
+				if ( '' === $full_name ) {
+					$customer_id = sanitize_text_field( (string) ( $session->customer ?? '' ) );
+					if ( '' !== $customer_id ) {
+						$customer = \Stripe\Customer::retrieve( $customer_id );
+						$full_name = sanitize_text_field( (string) ( $customer->name ?? '' ) );
+					}
+				}
+			}
+
+			if ( '' === $full_name ) {
+				$intent_id = sanitize_text_field( (string) ( $row['stripe_payment_intent_id'] ?? '' ) );
+				if ( '' !== $intent_id ) {
+					$intent = \Stripe\PaymentIntent::retrieve(
+						$intent_id,
+						array(
+							'expand' => array( 'latest_charge', 'customer' ),
+						)
+					);
+					$full_name = sanitize_text_field( (string) ( $intent->latest_charge->billing_details->name ?? '' ) );
+					if ( '' === $full_name ) {
+						$full_name = sanitize_text_field( (string) ( $intent->customer->name ?? '' ) );
+					}
+				}
+			}
+
+			if ( '' === $full_name ) {
+				return array( 'first_name' => '', 'last_name' => '' );
+			}
+
+			return $this->split_full_name_for_backfill( $full_name );
+		} catch ( Exception $e ) {
+			return array( 'first_name' => '', 'last_name' => '' );
+		}
+	}
+
+	/**
+	 * Split full name into first/last for donor backfill.
+	 *
+	 * @param string $full_name Full donor name.
+	 * @return array
+	 */
+	private function split_full_name_for_backfill( $full_name ) {
+		$full_name = sanitize_text_field( (string) $full_name );
+		$parts = preg_split( '/\s+/', trim( $full_name ) );
+		$parts = is_array( $parts ) ? array_values( array_filter( $parts ) ) : array();
+		if ( empty( $parts ) ) {
+			return array( 'first_name' => '', 'last_name' => '' );
+		}
+
+		$first = sanitize_text_field( (string) $parts[0] );
+		$last  = '';
+		if ( count( $parts ) > 1 ) {
+			$last = sanitize_text_field( implode( ' ', array_slice( $parts, 1 ) ) );
+		}
 		return array(
 			'first_name' => $first,
 			'last_name'  => $last,
