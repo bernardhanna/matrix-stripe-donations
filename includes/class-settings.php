@@ -904,7 +904,10 @@ class Matrix_Donations_Settings {
 	}
 
 	public function sanitize_options( $input ) {
-		$sanitized = array();
+		$sanitized = self::get_options();
+		if ( ! is_array( $input ) ) {
+			return $sanitized;
+		}
 
 		$text_fields = array(
 			'stripe_mode',
@@ -1042,7 +1045,9 @@ class Matrix_Donations_Settings {
 		if ( ! isset( $sanitized['design_enable_custom_styles'] ) || ! in_array( (string) $sanitized['design_enable_custom_styles'], array( '0', '1' ), true ) ) {
 			$sanitized['design_enable_custom_styles'] = '0';
 		}
-		$tax_percentage = isset( $input['checkout_tax_percentage'] ) ? (float) $input['checkout_tax_percentage'] : 20.0;
+		$tax_percentage = isset( $input['checkout_tax_percentage'] )
+			? (float) $input['checkout_tax_percentage']
+			: (float) ( $sanitized['checkout_tax_percentage'] ?? 20.0 );
 		if ( $tax_percentage < 0 ) {
 			$tax_percentage = 0;
 		}
@@ -2325,8 +2330,9 @@ class Matrix_Donations_Settings {
 	 * @return array
 	 */
 	private function run_quick_diagnostics() {
-		$issues = array();
-		$mode   = self::get_mode();
+		$issues    = array();
+		$warnings  = array();
+		$mode      = self::get_mode();
 
 		if ( ! Matrix_Donations_Stripe_Service::load_stripe() ) {
 			$issues[] = __( 'Stripe SDK is missing.', 'matrix-donations' );
@@ -2341,7 +2347,7 @@ class Matrix_Donations_Settings {
 			$issues[] = sprintf( __( '%s webhook secret is missing/invalid.', 'matrix-donations' ), strtoupper( $mode ) );
 		}
 		if ( ! self::get( 'checkout_page_id' ) ) {
-			$issues[] = __( 'Checkout page is not configured.', 'matrix-donations' );
+			$warnings[] = __( 'Checkout page is not configured (optional for some setups).', 'matrix-donations' );
 		}
 		if ( ! self::get( 'success_page_id' ) ) {
 			$issues[] = __( 'Success page is not configured.', 'matrix-donations' );
@@ -2352,6 +2358,8 @@ class Matrix_Donations_Settings {
 		if ( ! empty( $issues ) ) {
 			$success = false;
 			$message = __( 'Quick diagnostics found issues:', 'matrix-donations' ) . ' ' . implode( ' ', $issues );
+		} elseif ( ! empty( $warnings ) ) {
+			$message = __( 'Quick diagnostics passed with notes:', 'matrix-donations' ) . ' ' . implode( ' ', $warnings );
 		}
 
 		return array(
