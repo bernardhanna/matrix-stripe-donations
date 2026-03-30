@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<phpunit bootstrap="tests/bootstrap.php" colors="true">
+  <testsuites>
+    <testsuite name="Matrix Donations Unit">
+      <directory suffix="Test.php">tests/unit</directory>
+    </testsuite>
+    <testsuite name="Matrix Donations Integration">
+      <directory suffix="Test.php">tests/integration</directory>
+    </testsuite>
+  </testsuites>
+</phpunit>
