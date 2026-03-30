@@ -2,6 +2,15 @@ name: Matrix Donations E2E
 
 on:
   workflow_dispatch:
+    inputs:
+      base_url:
+        description: 'Optional base URL override'
+        required: false
+        default: ''
+      site_password:
+        description: 'Optional site password override'
+        required: false
+        default: ''
   push:
     paths:
       - 'wp-content/plugins/matrix-donations/**'
@@ -38,14 +47,14 @@ jobs:
         run: npm run test:e2e -- --list
 
       - name: Run e2e suite
-        if: ${{ secrets.MATRIX_DONATIONS_BASE_URL != '' }}
+        if: ${{ github.event.inputs.base_url != '' || secrets.MATRIX_DONATIONS_BASE_URL != '' }}
         env:
-          MATRIX_DONATIONS_BASE_URL: ${{ secrets.MATRIX_DONATIONS_BASE_URL }}
-          MATRIX_DONATIONS_SITE_PASSWORD: ${{ secrets.MATRIX_DONATIONS_SITE_PASSWORD }}
+          MATRIX_DONATIONS_BASE_URL: ${{ github.event.inputs.base_url || secrets.MATRIX_DONATIONS_BASE_URL }}
+          MATRIX_DONATIONS_SITE_PASSWORD: ${{ github.event.inputs.site_password || secrets.MATRIX_DONATIONS_SITE_PASSWORD }}
         run: npm run test:e2e
 
       - name: Skip notice
-        if: ${{ secrets.MATRIX_DONATIONS_BASE_URL == '' }}
+        if: ${{ github.event.inputs.base_url == '' && secrets.MATRIX_DONATIONS_BASE_URL == '' }}
         run: |
-          echo "MATRIX_DONATIONS_BASE_URL secret is not configured."
-          echo "Configured repository secret is required to execute browser tests."
+          echo "MATRIX_DONATIONS_BASE_URL is not configured."
+          echo "Set repository secret MATRIX_DONATIONS_BASE_URL or pass workflow_dispatch base_url input."

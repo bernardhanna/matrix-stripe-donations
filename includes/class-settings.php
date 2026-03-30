@@ -318,6 +318,31 @@ class Matrix_Donations_Settings {
 			)
 		);
 
+		add_settings_field(
+			'e2e_base_url',
+			__( 'E2E Base URL Override', 'matrix-donations' ),
+			array( $this, 'field_text_callback' ),
+			'matrix-donations-settings',
+			'matrix_donations_testing',
+			array(
+				'field'       => 'e2e_base_url',
+				'type'        => 'url',
+				'placeholder' => 'https://your-site.example',
+			)
+		);
+
+		add_settings_field(
+			'e2e_site_password',
+			__( 'E2E Site Password Override', 'matrix-donations' ),
+			array( $this, 'field_text_callback' ),
+			'matrix-donations-settings',
+			'matrix_donations_testing',
+			array(
+				'field' => 'e2e_site_password',
+				'type'  => 'password',
+			)
+		);
+
 		add_settings_section(
 			'matrix_donations_pages',
 			__( 'Donation Pages', 'matrix-donations' ),
@@ -717,7 +742,7 @@ class Matrix_Donations_Settings {
 	}
 
 	public function section_testing_callback() {
-		echo '<p>' . esc_html__( 'Controls for diagnostics, mock checkout, technical alerts, testing helpers, and optional GitHub-triggered Playwright runs from wp-admin.', 'matrix-donations' ) . '</p>';
+		echo '<p>' . esc_html__( 'Controls for diagnostics, mock checkout, technical alerts, testing helpers, and optional GitHub-triggered Playwright runs from wp-admin. E2E base URL/password overrides are optional; if empty, repository secrets are used.', 'matrix-donations' ) . '</p>';
 	}
 
 	public function section_pages_callback() {
@@ -897,6 +922,8 @@ class Matrix_Donations_Settings {
 			'e2e_github_workflow',
 			'e2e_github_ref',
 			'e2e_github_token',
+			'e2e_base_url',
+			'e2e_site_password',
 			'testing_cards_enabled',
 			'debug_enabled',
 			'mock_checkout_enabled',
@@ -958,6 +985,9 @@ class Matrix_Donations_Settings {
 		}
 		if ( isset( $input['testing_cards_reference'] ) ) {
 			$sanitized['testing_cards_reference'] = sanitize_textarea_field( $input['testing_cards_reference'] );
+		}
+		if ( isset( $input['e2e_base_url'] ) ) {
+			$sanitized['e2e_base_url'] = esc_url_raw( (string) $input['e2e_base_url'] );
 		}
 		if ( isset( $input['design_custom_css'] ) ) {
 			$sanitized['design_custom_css'] = wp_strip_all_tags( (string) $input['design_custom_css'] );
@@ -2149,6 +2179,8 @@ class Matrix_Donations_Settings {
 		$workflow = trim( (string) self::get( 'e2e_github_workflow' ) );
 		$ref      = trim( (string) self::get( 'e2e_github_ref' ) );
 		$token    = trim( (string) self::get( 'e2e_github_token' ) );
+		$base_url = trim( (string) self::get( 'e2e_base_url' ) );
+		$site_password = trim( (string) self::get( 'e2e_site_password' ) );
 
 		if ( '' === $repo || false === strpos( $repo, '/' ) ) {
 			return array(
@@ -2191,6 +2223,20 @@ class Matrix_Donations_Settings {
 			$repo_name,
 			rawurlencode( $workflow )
 		);
+		$payload = array(
+			'ref' => $ref,
+		);
+		$inputs = array();
+		if ( '' !== $base_url ) {
+			$inputs['base_url'] = esc_url_raw( $base_url );
+		}
+		if ( '' !== $site_password ) {
+			$inputs['site_password'] = $site_password;
+		}
+		if ( ! empty( $inputs ) ) {
+			$payload['inputs'] = $inputs;
+		}
+
 		$response = wp_remote_post(
 			$endpoint,
 			array(
@@ -2201,11 +2247,7 @@ class Matrix_Donations_Settings {
 					'X-GitHub-Api-Version' => '2022-11-28',
 					'User-Agent'           => 'Matrix-Donations-Plugin',
 				),
-				'body'    => wp_json_encode(
-					array(
-						'ref' => $ref,
-					)
-				),
+				'body'    => wp_json_encode( $payload ),
 			)
 		);
 
@@ -2233,7 +2275,12 @@ class Matrix_Donations_Settings {
 
 		return array(
 			'success'   => true,
-			'message'   => sprintf( __( 'Full Playwright E2E dispatched to GitHub Actions (%1$s @ %2$s).', 'matrix-donations' ), $repo, $ref ),
+			'message'   => sprintf(
+				__( 'Full Playwright E2E dispatched to GitHub Actions (%1$s @ %2$s). Base URL source: %3$s.', 'matrix-donations' ),
+				$repo,
+				$ref,
+				( '' !== $base_url ) ? __( 'Testing override', 'matrix-donations' ) : __( 'Repository secret', 'matrix-donations' )
+			),
 			'timestamp' => current_time( 'mysql' ),
 		);
 	}
@@ -2480,6 +2527,8 @@ class Matrix_Donations_Settings {
 			'e2e_github_workflow'          => 'donations-e2e.yml',
 			'e2e_github_ref'               => 'main',
 			'e2e_github_token'             => '',
+			'e2e_base_url'                 => '',
+			'e2e_site_password'            => '',
 			'testing_cards_enabled'        => '1',
 			'testing_cards_reference'      => "Use Stripe test mode only.\nCard: 4242 4242 4242 4242\nExpiry: any future date\nCVC: any 3 digits\nPostcode: any value",
 			'design_enable_custom_styles'  => '0',
