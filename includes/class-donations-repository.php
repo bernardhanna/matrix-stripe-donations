@@ -109,12 +109,14 @@ class Matrix_Donations_Donations_Repository {
 			return;
 		}
 
-		$existing_id = $wpdb->get_var(
+		$existing_row = $wpdb->get_row(
 			$wpdb->prepare(
-				"SELECT id FROM {$table_name} WHERE stripe_session_id = %s LIMIT 1",
+				"SELECT * FROM {$table_name} WHERE stripe_session_id = %s LIMIT 1",
 				$session_id
-			)
+			),
+			ARRAY_A
 		);
+		$existing_id = isset( $existing_row['id'] ) ? (int) $existing_row['id'] : 0;
 
 		$row = array(
 			'donation_type'           => sanitize_text_field( $data['donation_type'] ?? 'single' ),
@@ -135,6 +137,23 @@ class Matrix_Donations_Donations_Repository {
 		$formats = array( '%s', '%s', '%s', '%s', '%d', '%s', '%s', '%s', '%s', '%s', '%s', '%s', '%s', '%s' );
 
 		if ( $existing_id ) {
+			// Preserve known donor/session details when a webhook payload omits them.
+			if ( '' === trim( (string) $row['donor_first_name'] ) && ! empty( $existing_row['donor_first_name'] ) ) {
+				$row['donor_first_name'] = sanitize_text_field( (string) $existing_row['donor_first_name'] );
+			}
+			if ( '' === trim( (string) $row['donor_last_name'] ) && ! empty( $existing_row['donor_last_name'] ) ) {
+				$row['donor_last_name'] = sanitize_text_field( (string) $existing_row['donor_last_name'] );
+			}
+			if ( '' === trim( (string) $row['donor_email'] ) && ! empty( $existing_row['donor_email'] ) ) {
+				$row['donor_email'] = sanitize_email( (string) $existing_row['donor_email'] );
+			}
+			if ( '' === trim( (string) $row['stripe_payment_intent_id'] ) && ! empty( $existing_row['stripe_payment_intent_id'] ) ) {
+				$row['stripe_payment_intent_id'] = sanitize_text_field( (string) $existing_row['stripe_payment_intent_id'] );
+			}
+			if ( '' === trim( (string) $row['stripe_subscription_id'] ) && ! empty( $existing_row['stripe_subscription_id'] ) ) {
+				$row['stripe_subscription_id'] = sanitize_text_field( (string) $existing_row['stripe_subscription_id'] );
+			}
+
 			$wpdb->update(
 				$table_name,
 				$row,
@@ -343,6 +362,25 @@ class Matrix_Donations_Donations_Repository {
 			return (int) $wpdb->get_var( $sql );
 		}
 		return (int) $wpdb->get_var( $wpdb->prepare( $sql, $params ) );
+	}
+
+	/**
+	 * Get donation rows with missing donor names.
+	 *
+	 * @param int $limit Maximum rows to return.
+	 * @return array
+	 */
+	public static function get_missing_name_rows( $limit = 500 ) {
+		global $wpdb;
+		$table_name = self::table_name();
+		$max_rows   = max( 1, absint( $limit ) );
+		$sql        = $wpdb->prepare(
+			"SELECT * FROM {$table_name} WHERE donor_first_name = %s AND donor_last_name = %s ORDER BY created_at DESC LIMIT %d",
+			'',
+			'',
+			$max_rows
+		);
+		return $wpdb->get_results( $sql, ARRAY_A );
 	}
 
 	/**

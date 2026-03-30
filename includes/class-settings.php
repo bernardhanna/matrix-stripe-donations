@@ -32,6 +32,7 @@ class Matrix_Donations_Settings {
 		add_action( 'admin_post_matrix_donations_send_test_emails', array( $this, 'handle_send_test_emails' ) );
 		add_action( 'admin_post_matrix_donations_validate_stripe', array( $this, 'handle_validate_stripe' ) );
 		add_action( 'admin_post_matrix_donations_run_quick_diagnostics', array( $this, 'handle_run_quick_diagnostics' ) );
+		add_action( 'admin_post_matrix_donations_backfill_donor_names', array( $this, 'handle_backfill_donor_names' ) );
 		add_action( 'admin_post_matrix_donations_run_smoke_tests', array( $this, 'handle_run_smoke_tests' ) );
 		add_action( 'admin_post_matrix_donations_run_full_e2e', array( $this, 'handle_run_full_e2e' ) );
 		add_action( 'admin_post_matrix_donations_check_full_e2e_status', array( $this, 'handle_check_full_e2e_status' ) );
@@ -40,6 +41,7 @@ class Matrix_Donations_Settings {
 		add_action( 'admin_notices', array( $this, 'render_test_email_notice' ) );
 		add_action( 'admin_notices', array( $this, 'render_stripe_validation_notice' ) );
 		add_action( 'admin_notices', array( $this, 'render_quick_diagnostics_notice' ) );
+		add_action( 'admin_notices', array( $this, 'render_backfill_donor_names_notice' ) );
 		add_action( 'admin_notices', array( $this, 'render_smoke_tests_notice' ) );
 		add_action( 'admin_notices', array( $this, 'render_full_e2e_notice' ) );
 		add_action( 'admin_notices', array( $this, 'render_full_e2e_status_check_notice' ) );
@@ -1063,7 +1065,6 @@ class Matrix_Donations_Settings {
 		$current_page    = isset( $_GET['donations_paged'] ) ? max( 1, absint( $_GET['donations_paged'] ) ) : 1;
 		$per_page        = 50;
 
-		$stats = Matrix_Donations_Donations_Repository::get_summary_stats();
 		$total_filtered = Matrix_Donations_Donations_Repository::get_count(
 			array(
 				'mode'   => $selected_mode,
@@ -1084,18 +1085,7 @@ class Matrix_Donations_Settings {
 				'search' => $search_term,
 			)
 		);
-		$active_mode = Matrix_Donations_Settings::get_mode();
-		$test_cards_enabled = '1' === (string) self::get( 'testing_cards_enabled' );
-		$test_cards_reference = (string) self::get( 'testing_cards_reference' );
 		$last_diagnostics = self::get_last_quick_diagnostics();
-		$last_smoke_tests = self::get_last_smoke_tests();
-		$last_full_e2e = self::get_last_full_e2e_dispatch();
-		$last_e2e_status = self::get_last_e2e_status();
-		$last_webhook_status = class_exists( 'Matrix_Donations_Webhook' ) ? Matrix_Donations_Webhook::get_last_webhook_status() : array();
-		$test_key_ok = self::starts_with_any( (string) self::get( 'stripe_test_secret_key' ), array( 'sk_test_', 'rk_test_' ) );
-		$live_key_ok = self::starts_with_any( (string) self::get( 'stripe_live_secret_key' ), array( 'sk_live_', 'rk_live_' ) );
-		$test_webhook_ok = self::starts_with_any( (string) self::get( 'stripe_test_webhook_secret' ), array( 'whsec_' ) );
-		$live_webhook_ok = self::starts_with_any( (string) self::get( 'stripe_live_webhook_secret' ), array( 'whsec_' ) );
 		?>
 		<div class="wrap">
 			<h1><?php esc_html_e( 'Matrix Donations', 'matrix-donations' ); ?></h1>
@@ -1106,26 +1096,9 @@ class Matrix_Donations_Settings {
 				<?php submit_button( __( 'Run Quick Diagnostics', 'matrix-donations' ), 'secondary', 'submit', false ); ?>
 			</form>
 			<form method="post" action="<?php echo esc_url( admin_url( 'admin-post.php' ) ); ?>" style="display:inline-block;margin:0 8px 10px 0;">
-				<input type="hidden" name="action" value="matrix_donations_run_smoke_tests" />
-				<?php wp_nonce_field( 'matrix_donations_run_smoke_tests', 'matrix_donations_nonce' ); ?>
-				<?php submit_button( __( 'Run Smoke Tests', 'matrix-donations' ), 'secondary', 'submit', false ); ?>
-			</form>
-			<form method="post" action="<?php echo esc_url( admin_url( 'admin-post.php' ) ); ?>" style="display:inline-block;margin:0 8px 10px 0;">
-				<input type="hidden" name="action" value="matrix_donations_run_full_e2e" />
-				<?php wp_nonce_field( 'matrix_donations_run_full_e2e', 'matrix_donations_nonce' ); ?>
-				<?php submit_button( __( 'Run Full Playwright E2E', 'matrix-donations' ), 'secondary', 'submit', false ); ?>
-			</form>
-			<form method="post" action="<?php echo esc_url( admin_url( 'admin-post.php' ) ); ?>" style="display:inline-block;margin:0 8px 10px 0;">
-				<input type="hidden" name="action" value="matrix_donations_mark_e2e_status" />
-				<input type="hidden" name="status" value="passed" />
-				<?php wp_nonce_field( 'matrix_donations_mark_e2e_status', 'matrix_donations_nonce' ); ?>
-				<?php submit_button( __( 'Mark E2E Passed', 'matrix-donations' ), 'secondary', 'submit', false ); ?>
-			</form>
-			<form method="post" action="<?php echo esc_url( admin_url( 'admin-post.php' ) ); ?>" style="display:inline-block;margin:0 0 10px 0;">
-				<input type="hidden" name="action" value="matrix_donations_mark_e2e_status" />
-				<input type="hidden" name="status" value="failed" />
-				<?php wp_nonce_field( 'matrix_donations_mark_e2e_status', 'matrix_donations_nonce' ); ?>
-				<?php submit_button( __( 'Mark E2E Failed', 'matrix-donations' ), 'secondary', 'submit', false ); ?>
+				<input type="hidden" name="action" value="matrix_donations_backfill_donor_names" />
+				<?php wp_nonce_field( 'matrix_donations_backfill_donor_names', 'matrix_donations_nonce' ); ?>
+				<?php submit_button( __( 'Backfill Missing Donor Names', 'matrix-donations' ), 'secondary', 'submit', false ); ?>
 			</form>
 			<?php if ( ! empty( $last_diagnostics['message'] ) ) : ?>
 				<p>
@@ -1133,94 +1106,6 @@ class Matrix_Donations_Settings {
 					<?php echo esc_html( $last_diagnostics['message'] ); ?>
 				</p>
 			<?php endif; ?>
-			<?php if ( ! empty( $last_smoke_tests['message'] ) ) : ?>
-				<p>
-					<strong><?php esc_html_e( 'Last Smoke Tests:', 'matrix-donations' ); ?></strong>
-					<?php echo esc_html( $last_smoke_tests['message'] ); ?>
-				</p>
-			<?php endif; ?>
-			<?php if ( ! empty( $last_full_e2e['message'] ) ) : ?>
-				<p>
-					<strong><?php esc_html_e( 'Last Full E2E Dispatch:', 'matrix-donations' ); ?></strong>
-					<?php echo esc_html( $last_full_e2e['message'] ); ?>
-				</p>
-			<?php endif; ?>
-			<?php if ( ! empty( $last_e2e_status['message'] ) ) : ?>
-				<p>
-					<strong><?php esc_html_e( 'Last E2E Status:', 'matrix-donations' ); ?></strong>
-					<?php echo esc_html( $last_e2e_status['message'] ); ?>
-				</p>
-			<?php endif; ?>
-			<?php if ( 'test' === $active_mode && $test_cards_enabled && '' !== trim( $test_cards_reference ) ) : ?>
-				<div class="notice notice-info inline">
-					<p><strong><?php esc_html_e( 'Test Card Reference', 'matrix-donations' ); ?></strong></p>
-					<pre style="white-space:pre-wrap;margin:0;"><?php echo esc_html( $test_cards_reference ); ?></pre>
-				</div>
-			<?php endif; ?>
-
-			<table class="widefat striped" style="max-width:960px;margin-bottom:16px;">
-				<tbody>
-					<tr>
-						<th><?php esc_html_e( 'Current Site Context', 'matrix-donations' ); ?></th>
-						<td>
-							<?php
-							$site_context = $this->get_site_context_label();
-							echo esc_html( $site_context );
-							?>
-						</td>
-					</tr>
-					<tr>
-						<th style="width:240px;"><?php esc_html_e( 'Active Stripe Mode', 'matrix-donations' ); ?></th>
-						<td><?php echo esc_html( strtoupper( $active_mode ) ); ?></td>
-					</tr>
-					<tr>
-						<th><?php esc_html_e( 'Webhook Endpoint', 'matrix-donations' ); ?></th>
-						<td><code><?php echo esc_html( rest_url( 'matrix-donations/v1/webhook' ) ); ?></code></td>
-					</tr>
-					<tr>
-						<th><?php esc_html_e( 'Last Webhook Health', 'matrix-donations' ); ?></th>
-						<td>
-							<?php
-							if ( ! empty( $last_webhook_status['timestamp'] ) ) {
-								$parts = array(
-									! empty( $last_webhook_status['success'] ) ? 'ok' : 'error',
-									(string) ( $last_webhook_status['event'] ?? '' ),
-									(string) ( $last_webhook_status['timestamp'] ?? '' ),
-									(string) ( $last_webhook_status['message'] ?? '' ),
-								);
-								echo esc_html( implode( ' | ', array_filter( $parts ) ) );
-							} else {
-								esc_html_e( 'No webhook activity recorded yet.', 'matrix-donations' );
-							}
-							?>
-						</td>
-					</tr>
-					<tr>
-						<th><?php esc_html_e( 'Test Credentials', 'matrix-donations' ); ?></th>
-						<td><?php echo esc_html( ( $test_key_ok && $test_webhook_ok ) ? __( 'Configured', 'matrix-donations' ) : __( 'Incomplete', 'matrix-donations' ) ); ?><?php echo esc_html( sprintf( ' (key: %s, webhook: %s)', $test_key_ok ? 'ok' : 'missing', $test_webhook_ok ? 'ok' : 'missing' ) ); ?></td>
-					</tr>
-					<tr>
-						<th><?php esc_html_e( 'Live Credentials', 'matrix-donations' ); ?></th>
-						<td><?php echo esc_html( ( $live_key_ok && $live_webhook_ok ) ? __( 'Configured', 'matrix-donations' ) : __( 'Incomplete', 'matrix-donations' ) ); ?><?php echo esc_html( sprintf( ' (key: %s, webhook: %s)', $live_key_ok ? 'ok' : 'missing', $live_webhook_ok ? 'ok' : 'missing' ) ); ?></td>
-					</tr>
-					<tr>
-						<th><?php esc_html_e( 'Donation Totals', 'matrix-donations' ); ?></th>
-						<td>
-							<?php
-							$totals = array( 'total: ' . (int) ( $stats['total'] ?? 0 ) );
-							foreach ( (array) ( $stats['by_mode'] ?? array() ) as $mode => $count ) {
-								$totals[] = $mode . ': ' . (int) $count;
-							}
-							foreach ( (array) ( $stats['by_status'] ?? array() ) as $status => $count ) {
-								$totals[] = $status . ': ' . (int) $count;
-							}
-							echo esc_html( implode( ' | ', $totals ) );
-							?>
-						</td>
-					</tr>
-				</tbody>
-			</table>
-
 			<form method="get" action="<?php echo esc_url( admin_url( 'admin.php' ) ); ?>" style="margin-bottom:12px;">
 				<input type="hidden" name="page" value="matrix-donations" />
 				<input type="hidden" name="donations_paged" value="1" />
@@ -1654,6 +1539,141 @@ class Matrix_Donations_Settings {
 	}
 
 	/**
+	 * Backfill missing donor names from existing metadata/email signals.
+	 *
+	 * @return void
+	 */
+	public function handle_backfill_donor_names() {
+		if ( ! current_user_can( 'manage_options' ) ) {
+			wp_die( esc_html__( 'Unauthorized.', 'matrix-donations' ) );
+		}
+		check_admin_referer( 'matrix_donations_backfill_donor_names', 'matrix_donations_nonce' );
+
+		$result = $this->backfill_missing_donor_names();
+		update_option( 'matrix_donations_last_donor_backfill', $result, false );
+
+		wp_safe_redirect(
+			add_query_arg(
+				array(
+					'page'                  => 'matrix-donations',
+					'matrix_donor_backfill' => '1',
+				),
+				admin_url( 'admin.php' )
+			)
+		);
+		exit;
+	}
+
+	/**
+	 * Perform donor-name backfill operation.
+	 *
+	 * @return array
+	 */
+	private function backfill_missing_donor_names() {
+		$rows    = Matrix_Donations_Donations_Repository::get_missing_name_rows( 1000 );
+		$checked = 0;
+		$updated = 0;
+		$skipped = 0;
+
+		foreach ( (array) $rows as $row ) {
+			$checked++;
+			if ( empty( $row['id'] ) ) {
+				$skipped++;
+				continue;
+			}
+
+			$names = $this->extract_donor_names_for_backfill( $row );
+			$first = sanitize_text_field( (string) ( $names['first_name'] ?? '' ) );
+			$last  = sanitize_text_field( (string) ( $names['last_name'] ?? '' ) );
+			if ( '' === $first && '' === $last ) {
+				$skipped++;
+				continue;
+			}
+
+			$ok = Matrix_Donations_Donations_Repository::update_by_id(
+				(int) $row['id'],
+				array(
+					'donor_first_name' => $first,
+					'donor_last_name'  => $last,
+				),
+				array( '%s', '%s' )
+			);
+			if ( $ok ) {
+				$updated++;
+			} else {
+				$skipped++;
+			}
+		}
+
+		return array(
+			'success'   => true,
+			'checked'   => $checked,
+			'updated'   => $updated,
+			'skipped'   => $skipped,
+			'timestamp' => current_time( 'mysql' ),
+			'message'   => sprintf(
+				/* translators: 1: checked rows, 2: updated rows, 3: skipped rows */
+				__( 'Donor name backfill complete. Checked: %1$d, Updated: %2$d, Skipped: %3$d.', 'matrix-donations' ),
+				$checked,
+				$updated,
+				$skipped
+			),
+		);
+	}
+
+	/**
+	 * Extract donor names from row metadata/email for backfill.
+	 *
+	 * @param array $row Donation row.
+	 * @return array
+	 */
+	private function extract_donor_names_for_backfill( $row ) {
+		$first = '';
+		$last  = '';
+		$meta  = json_decode( (string) ( $row['metadata'] ?? '' ), true );
+		if ( is_array( $meta ) ) {
+			$first = sanitize_text_field( (string) ( $meta['first_name'] ?? '' ) );
+			$last  = sanitize_text_field( (string) ( $meta['last_name'] ?? '' ) );
+			if ( '' === $first && '' === $last ) {
+				$full = sanitize_text_field( (string) ( $meta['full_name'] ?? '' ) );
+				if ( '' !== trim( $full ) ) {
+					$parts = preg_split( '/\s+/', trim( $full ) );
+					$parts = is_array( $parts ) ? array_values( array_filter( $parts ) ) : array();
+					if ( ! empty( $parts ) ) {
+						$first = sanitize_text_field( (string) $parts[0] );
+						if ( count( $parts ) > 1 ) {
+							$last = sanitize_text_field( implode( ' ', array_slice( $parts, 1 ) ) );
+						}
+					}
+				}
+			}
+		}
+
+		// Last-resort fallback from readable email local part (e.g. john.smith@...).
+		if ( '' === $first && '' === $last ) {
+			$email = sanitize_email( (string) ( $row['donor_email'] ?? '' ) );
+			$local = strstr( $email, '@', true );
+			if ( false !== $local && preg_match( '/[._-]/', $local ) ) {
+				$local = str_replace( array( '.', '_', '-' ), ' ', (string) $local );
+				$local = preg_replace( '/\s+/', ' ', trim( (string) $local ) );
+				$parts = preg_split( '/\s+/', (string) $local );
+				$parts = is_array( $parts ) ? array_values( array_filter( $parts ) ) : array();
+				if ( ! empty( $parts ) ) {
+					$first = sanitize_text_field( ucwords( (string) $parts[0] ) );
+					if ( count( $parts ) > 1 ) {
+						$last = sanitize_text_field( ucwords( implode( ' ', array_slice( $parts, 1 ) ) ) );
+					}
+				}
+			}
+		}
+
+		return array(
+			'first_name' => $first,
+			'last_name'  => $last,
+		);
+	}
+
+	/**
 	 * Run lightweight smoke tests against configured donation pages.
 	 *
 	 * @return void
@@ -1769,7 +1789,8 @@ class Matrix_Donations_Settings {
 		wp_safe_redirect(
 			add_query_arg(
 				array(
-					'page'              => 'matrix-donations',
+					'page'              => 'matrix-donations-settings',
+					'settings_tab'      => 'e2e',
 					'matrix_e2e_status' => '1',
 				),
 				admin_url( 'admin.php' )
@@ -1850,6 +1871,33 @@ class Matrix_Donations_Settings {
 	}
 
 	/**
+	 * Show notice after donor name backfill run.
+	 *
+	 * @return void
+	 */
+	public function render_backfill_donor_names_notice() {
+		if ( ! current_user_can( 'manage_options' ) ) {
+			return;
+		}
+		$page = isset( $_GET['page'] ) ? sanitize_text_field( wp_unslash( $_GET['page'] ) ) : '';
+		$flag = isset( $_GET['matrix_donor_backfill'] ) ? sanitize_text_field( wp_unslash( $_GET['matrix_donor_backfill'] ) ) : '';
+		if ( 'matrix-donations' !== $page || '1' !== $flag ) {
+			return;
+		}
+
+		$last = get_option( 'matrix_donations_last_donor_backfill', array() );
+		if ( ! is_array( $last ) || empty( $last['message'] ) ) {
+			return;
+		}
+
+		?>
+		<div class="notice notice-success">
+			<p><?php echo esc_html( (string) $last['message'] ); ?></p>
+		</div>
+		<?php
+	}
+
+	/**
 	 * Show notice after smoke tests run.
 	 *
 	 * @return void
@@ -1860,7 +1908,7 @@ class Matrix_Donations_Settings {
 		}
 		$page = isset( $_GET['page'] ) ? sanitize_text_field( wp_unslash( $_GET['page'] ) ) : '';
 		$flag = isset( $_GET['matrix_smoke_tests'] ) ? sanitize_text_field( wp_unslash( $_GET['matrix_smoke_tests'] ) ) : '';
-		if ( '1' !== $flag || ! in_array( $page, array( 'matrix-donations', 'matrix-donations-settings' ), true ) ) {
+		if ( '1' !== $flag || 'matrix-donations-settings' !== $page ) {
 			return;
 		}
 
@@ -1888,7 +1936,7 @@ class Matrix_Donations_Settings {
 		}
 		$page = isset( $_GET['page'] ) ? sanitize_text_field( wp_unslash( $_GET['page'] ) ) : '';
 		$flag = isset( $_GET['matrix_full_e2e'] ) ? sanitize_text_field( wp_unslash( $_GET['matrix_full_e2e'] ) ) : '';
-		if ( '1' !== $flag || ! in_array( $page, array( 'matrix-donations', 'matrix-donations-settings' ), true ) ) {
+		if ( '1' !== $flag || 'matrix-donations-settings' !== $page ) {
 			return;
 		}
 
@@ -1916,7 +1964,7 @@ class Matrix_Donations_Settings {
 		}
 		$page = isset( $_GET['page'] ) ? sanitize_text_field( wp_unslash( $_GET['page'] ) ) : '';
 		$flag = isset( $_GET['matrix_full_e2e_status'] ) ? sanitize_text_field( wp_unslash( $_GET['matrix_full_e2e_status'] ) ) : '';
-		if ( '1' !== $flag || ! in_array( $page, array( 'matrix-donations', 'matrix-donations-settings' ), true ) ) {
+		if ( '1' !== $flag || 'matrix-donations-settings' !== $page ) {
 			return;
 		}
 
@@ -1944,7 +1992,7 @@ class Matrix_Donations_Settings {
 		}
 		$page = isset( $_GET['page'] ) ? sanitize_text_field( wp_unslash( $_GET['page'] ) ) : '';
 		$flag = isset( $_GET['matrix_e2e_status'] ) ? sanitize_text_field( wp_unslash( $_GET['matrix_e2e_status'] ) ) : '';
-		if ( 'matrix-donations' !== $page || '1' !== $flag ) {
+		if ( 'matrix-donations-settings' !== $page || '1' !== $flag ) {
 			return;
 		}
 
@@ -2226,6 +2274,7 @@ class Matrix_Donations_Settings {
 	 */
 	private function run_smoke_tests() {
 		$issues      = array();
+		$warnings    = array();
 		$total_tests = 0;
 		$passed      = 0;
 		$page_map    = array(
@@ -2274,7 +2323,18 @@ class Matrix_Donations_Settings {
 				continue;
 			}
 
-			if ( false === strpos( $body, 'id="salesforceForm"' ) || false === strpos( $body, 'id="checkout-status"' ) ) {
+			if ( $this->looks_password_protected_page( $body ) ) {
+				$fallback = $this->validate_password_protected_page_fallback( $page_id, $label );
+				if ( ! empty( $fallback['ok'] ) ) {
+					$passed++;
+					$warnings[] = (string) $fallback['message'];
+					continue;
+				}
+				$issues[] = (string) $fallback['message'];
+				continue;
+			}
+
+			if ( ! $this->has_donation_form_markers( $body ) ) {
 				$issues[] = sprintf( __( '%s page loaded but donation form markers were not found.', 'matrix-donations' ), ucfirst( $label ) );
 				continue;
 			}
@@ -2292,12 +2352,127 @@ class Matrix_Donations_Settings {
 		if ( ! $success ) {
 			$message .= ' ' . implode( ' ', $issues );
 		}
+		if ( ! empty( $warnings ) ) {
+			$message .= ' ' . implode( ' ', $warnings );
+		}
 
 		return array(
 			'success'   => $success,
 			'message'   => $message,
 			'timestamp' => current_time( 'mysql' ),
 		);
+	}
+
+	/**
+	 * Fallback smoke validation when loopback is blocked by password protection.
+	 *
+	 * @param int    $page_id Donation page ID.
+	 * @param string $label   Page label (single|monthly).
+	 * @return array
+	 */
+	private function validate_password_protected_page_fallback( $page_id, $label ) {
+		$post = get_post( $page_id );
+		if ( ! $post instanceof WP_Post ) {
+			return array(
+				'ok'      => false,
+				'message' => sprintf( __( '%s page appears password-protected and fallback validation failed because the page record could not be loaded.', 'matrix-donations' ), ucfirst( $label ) ),
+			);
+		}
+
+		$content = (string) $post->post_content;
+		if ( '' === trim( $content ) ) {
+			return array(
+				'ok'      => false,
+				'message' => sprintf( __( '%s page appears password-protected and fallback validation failed because page content is empty.', 'matrix-donations' ), ucfirst( $label ) ),
+			);
+		}
+
+		$has_shortcode = false !== strpos( $content, '[donate' );
+		if ( ! $has_shortcode ) {
+			return array(
+				'ok'      => false,
+				'message' => sprintf( __( '%s page appears password-protected and fallback validation failed because no donate shortcode was found in content.', 'matrix-donations' ), ucfirst( $label ) ),
+			);
+		}
+
+		if ( 'monthly' === $label ) {
+			$has_monthly_type = false !== strpos( $content, 'type="monthly"' ) || false !== strpos( $content, "type='monthly'" );
+			if ( ! $has_monthly_type ) {
+				return array(
+					'ok'      => false,
+					'message' => __( 'Monthly page appears password-protected and fallback validation could not confirm type="monthly" on the donate shortcode.', 'matrix-donations' ),
+				);
+			}
+		}
+
+		return array(
+			'ok'      => true,
+			'message' => sprintf( __( '%s page appears password-protected in loopback checks; fallback shortcode validation passed.', 'matrix-donations' ), ucfirst( $label ) ),
+		);
+	}
+
+	/**
+	 * Detect if a response body looks like a password gate page.
+	 *
+	 * @param string $body Response body.
+	 * @return bool
+	 */
+	private function looks_password_protected_page( $body ) {
+		$body = (string) $body;
+		$markers = array(
+			'password_protected_pwd',
+			'Password Protected',
+			'Enter Password',
+		);
+		foreach ( $markers as $marker ) {
+			if ( false !== strpos( $body, $marker ) ) {
+				return true;
+			}
+		}
+		return false;
+	}
+
+	/**
+	 * Validate donation form markers using flexible matching.
+	 *
+	 * @param string $body Response body.
+	 * @return bool
+	 */
+	private function has_donation_form_markers( $body ) {
+		$body = (string) $body;
+
+		$form_markers = array(
+			'id="salesforceForm"',
+			"id='salesforceForm'",
+			'class="salesformForm_donation"',
+			"class='salesformForm_donation'",
+			'matrix-donation-submit-btn',
+		);
+		$status_markers = array(
+			'id="checkout-status"',
+			"id='checkout-status'",
+			'name="donation_type"',
+			"name='donation_type'",
+			'checkout-error',
+		);
+
+		return $this->contains_any_marker( $body, $form_markers ) && $this->contains_any_marker( $body, $status_markers );
+	}
+
+	/**
+	 * Utility matcher for finding any marker in response body.
+	 *
+	 * @param string $body    Response body.
+	 * @param array  $markers Candidate marker strings.
+	 * @return bool
+	 */
+	private function contains_any_marker( $body, $markers ) {
+		foreach ( (array) $markers as $marker ) {
+			if ( '' !== (string) $marker && false !== strpos( (string) $body, (string) $marker ) ) {
+				return true;
+			}
+		}
+		return false;
 	}
 
 	/**

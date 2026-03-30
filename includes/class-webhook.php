@@ -157,6 +157,27 @@ class Matrix_Donations_Webhook {
 		$session_id = sanitize_text_field( $session->id ?? '' );
 		$existing   = Matrix_Donations_Donations_Repository::get_by_session_id( $session_id );
 		$was_paid   = ! empty( $existing['status'] ) && 'paid' === sanitize_text_field( $existing['status'] );
+		$donor_name = sanitize_text_field( $session->customer_details->name ?? '' );
+		$name_parts = preg_split( '/\s+/', trim( $donor_name ) );
+		$name_parts = is_array( $name_parts ) ? array_values( array_filter( $name_parts ) ) : array();
+		$first_name = sanitize_text_field( $metadata['first_name'] ?? '' );
+		$last_name  = sanitize_text_field( $metadata['last_name'] ?? '' );
+		if ( '' === $first_name && ! empty( $name_parts ) ) {
+			$first_name = sanitize_text_field( (string) $name_parts[0] );
+		}
+		if ( '' === $last_name && count( $name_parts ) > 1 ) {
+			$last_name = sanitize_text_field( implode( ' ', array_slice( $name_parts, 1 ) ) );
+		}
+		if ( '' === $first_name && ! empty( $existing['donor_first_name'] ) ) {
+			$first_name = sanitize_text_field( (string) $existing['donor_first_name'] );
+		}
+		if ( '' === $last_name && ! empty( $existing['donor_last_name'] ) ) {
+			$last_name = sanitize_text_field( (string) $existing['donor_last_name'] );
+		}
+		$donor_email = sanitize_email( $session->customer_details->email ?? '' );
+		if ( '' === $donor_email && ! empty( $existing['donor_email'] ) ) {
+			$donor_email = sanitize_email( (string) $existing['donor_email'] );
+		}
 		$metadata_type = sanitize_text_field( $metadata['donation_type'] ?? '' );
 		if ( ! Matrix_Donations_Validation::is_valid_donation_type( $metadata_type ) ) {
 			$metadata_type = sanitize_text_field( $existing['donation_type'] ?? '' );
@@ -173,9 +194,9 @@ class Matrix_Donations_Webhook {
 			'currency'                 => sanitize_text_field( $session->currency ?? 'eur' ),
 			'amount_cents'             => absint( $session->amount_total ?? 0 ),
 			'status'                   => $status,
-			'donor_email'              => sanitize_email( $session->customer_details->email ?? '' ),
-			'donor_first_name'         => sanitize_text_field( $metadata['first_name'] ?? '' ),
-			'donor_last_name'          => sanitize_text_field( $metadata['last_name'] ?? '' ),
+			'donor_email'              => $donor_email,
+			'donor_first_name'         => $first_name,
+			'donor_last_name'          => $last_name,
 			'stripe_session_id'        => $session_id,
 			'stripe_payment_intent_id' => sanitize_text_field( $session->payment_intent ?? '' ),
 			'stripe_subscription_id'   => sanitize_text_field( $session->subscription ?? '' ),
